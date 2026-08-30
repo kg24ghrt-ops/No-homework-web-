@@ -32,3 +32,4 @@ Thumbs.db
 # Cache directories
 .cache/
 .eslintcache
+node_modules/
