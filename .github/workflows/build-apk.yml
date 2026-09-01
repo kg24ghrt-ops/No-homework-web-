@@ -205,6 +205,8 @@ jobs:
     needs: build-android
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download APK artifact
         uses: actions/download-artifact@v4
@@ -213,11 +215,11 @@ jobs:
           path: apk/
           
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
-            apk/app-debug.apk
-            apk/app-release-unsigned.apk
+            apk/**/app-debug.apk
+            apk/**/app-release-unsigned.apk
           tag_name: v${{ github.run_number }}
           generate_release_notes: true
           prerelease: false
