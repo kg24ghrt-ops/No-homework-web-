@@ -158,7 +158,7 @@ class GPUNotebookRenderer {
       }
     `;
     
-    // Fragment shader for paper texture
+    // Fragment shader for realistic paper texture
     const fsSource = `
       precision highp float;
       uniform vec2 resolution;
@@ -169,45 +169,111 @@ class GPUNotebookRenderer {
       uniform float lineOpacity;
       uniform vec3 paperColor;
       uniform vec3 marginColor;
-      
-      float noise(vec2 p) {
-        return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
       }
-      
+
+      float valueNoise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = hash(i);
+        float b = hash(i + vec2(1.0, 0.0));
+        float c = hash(i + vec2(0.0, 1.0));
+        float d = hash(i + vec2(1.0, 1.0));
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+
       float fbm(vec2 p) {
         float value = 0.0;
         float amplitude = 0.5;
-        for (int i = 0; i < 4; i++) {
-          value += amplitude * noise(p);
-          p *= 2.0;
+        float frequency = 1.0;
+        for (int i = 0; i < 5; i++) {
+          value += amplitude * valueNoise(p * frequency);
+          frequency *= 2.0;
           amplitude *= 0.5;
         }
         return value;
       }
-      
+
+      float fbmDomainWarped(vec2 p) {
+        vec2 q = vec2(fbm(p), fbm(p + vec2(5.2, 1.3)));
+        vec2 r = vec2(fbm(p + 4.0 * q + vec2(1.7, 9.2) + 0.15),
+                       fbm(p + 4.0 * q + vec2(8.3, 2.8) + 0.126));
+        return fbm(p + 3.5 * r);
+      }
+
       void main() {
         vec2 uv = gl_FragCoord.xy / resolution;
         vec2 pos = uv * resolution;
-        
-        float paperNoise = fbm(pos * 0.01) * 0.1;
-        vec3 paper = paperColor + vec3(paperNoise * 0.05);
-        
+
+        // --- Paper base color with warm/cool variation ---
+        float colorTemp = fbm(pos * 0.003) * 0.015 - 0.0075;
+        vec3 warmTint = vec3(colorTemp, colorTemp * 0.5, -colorTemp * 0.3);
+        vec3 paper = paperColor + warmTint;
+
+        // --- Coarse paper structure (large blotches, fiber bundles) ---
+        float coarseNoise = fbmDomainWarped(pos * 0.004) * 0.06 - 0.03;
+        paper += vec3(coarseNoise);
+
+        // --- Fine paper fiber texture ---
+        float fineNoise1 = valueNoise(pos * 0.08) * 0.03 - 0.015;
+        float fineNoise2 = valueNoise(pos * 0.25) * 0.015 - 0.0075;
+        paper += vec3(fineNoise1 + fineNoise2);
+
+        // --- Horizontal fiber directionality (laid paper effect) ---
+        float laidLine = sin(pos.y * 0.8 + fbm(pos * 0.01) * 4.0) * 0.005;
+        paper += vec3(laidLine);
+
+        // --- Edge darkening (paper curl / shadow at borders) ---
+        float edgeX = smoothstep(0.0, 30.0, pos.x) * smoothstep(0.0, 30.0, resolution.x - pos.x);
+        float edgeY = smoothstep(0.0, 20.0, pos.y) * smoothstep(0.0, 20.0, resolution.y - pos.y);
+        float edgeDarken = edgeX * edgeY;
+        paper *= 0.94 + edgeDarken * 0.06;
+
+        // --- Top edge subtle shadow (paper sits on surface) ---
+        float topShadow = smoothstep(resolution.y, resolution.y - 15.0, pos.y) * 0.04;
+        paper -= vec3(topShadow);
+
+        // --- Subtle specular highlight (light from top-left) ---
+        float specDist = length((pos / resolution - vec2(0.25, 0.85)) * vec2(1.0, 0.7));
+        float specular = exp(-specDist * specDist * 6.0) * 0.02;
+        paper += vec3(specular);
+
         vec3 color = paper;
-        
-        if (pos.x < margin) {
-          float marginAlpha = smoothstep(margin - 2.0, margin, pos.x);
-          color = mix(paper, marginColor, marginAlpha * 0.3);
+
+        // --- Margin zone ---
+        float marginPx = margin;
+        float marginSoft = 6.0;
+        float marginProgress = smoothstep(marginPx - marginSoft, marginPx + marginSoft, pos.x);
+        vec3 marginTint = mix(marginColor, paper, marginProgress);
+        float marginAlpha = (1.0 - marginProgress) * 0.15;
+        color = mix(color, marginTint, marginAlpha);
+
+        // --- Margin line (vertical red line) ---
+        float distToMargin = abs(pos.x - marginPx);
+        float marginLineAlpha = 1.0 - smoothstep(0.0, 0.8, distToMargin);
+        color = mix(color, marginColor * 0.8, marginLineAlpha * 0.65);
+
+        // --- Ruling lines ---
+        float lineThick = 0.8;
+        float distToLine = mod(pos.y, lineSpacing);
+        if (pos.y > lineSpacing * 0.5) {
+          distToLine = min(distToLine, lineSpacing - distToLine);
         }
-        
-        float lineY = mod(pos.y, lineSpacing);
-        if (lineY < 1.0) {
-          float lineAlpha = smoothstep(0.0, 1.0, lineY);
-          color = mix(color, lineColor, lineOpacity * lineAlpha);
-        }
-        
-        float grain = fbm(pos * 0.5) * 0.02;
+        float lineAlpha = 1.0 - smoothstep(0.0, lineThick, distToLine);
+        float lineShadowAlpha = 1.0 - smoothstep(0.0, 2.0, abs(distToLine - lineThick * 0.5));
+        vec3 lineWithShadow = mix(color, lineColor * 0.7, lineShadowAlpha * 0.03);
+        color = mix(lineWithShadow, lineColor, lineAlpha * lineOpacity);
+
+        // --- Final film grain ---
+        float grain = (fbm(pos * 0.4) - 0.5) * 0.025;
         color += vec3(grain);
-        
+
+        // --- Clamp ---
+        color = clamp(color, 0.0, 1.0);
+
         gl_FragColor = vec4(color, 1.0);
       }
     `;
@@ -497,8 +563,8 @@ class GPUNotebookRenderer {
     
     gl.uniform2f(gl.getUniformLocation(this.program, 'resolution'), actualWidth, actualHeight);
     gl.uniform1f(gl.getUniformLocation(this.program, 'time'), performance.now() / 1000);
-    gl.uniform1f(gl.getUniformLocation(this.program, 'lineSpacing'), this.config.lineSpacing * scale);
-    gl.uniform1f(gl.getUniformLocation(this.program, 'margin'), this.config.margin * scale);
+    gl.uniform1f(gl.getUniformLocation(this.program, 'lineSpacing'), this.config.lineSpacing * MM_TO_PX * scale);
+    gl.uniform1f(gl.getUniformLocation(this.program, 'margin'), this.config.margin * MM_TO_PX * scale);
     gl.uniform3f(gl.getUniformLocation(this.program, 'lineColor'), lineColor.r, lineColor.g, lineColor.b);
     gl.uniform1f(gl.getUniformLocation(this.program, 'lineOpacity'), this.config.lineOpacity);
     gl.uniform3f(gl.getUniformLocation(this.program, 'paperColor'), paperColor.r, paperColor.g, paperColor.b);
@@ -509,6 +575,18 @@ class GPUNotebookRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
   
+  private fbm2D(x: number, y: number, octaves: number = 5): number {
+    let value = 0;
+    let amplitude = 0.5;
+    let frequency = 1;
+    for (let i = 0; i < octaves; i++) {
+      value += amplitude * this.noise(x * frequency, y * frequency);
+      frequency *= 2.0;
+      amplitude *= 0.5;
+    }
+    return value;
+  }
+
   private renderCanvas2D(width: number, height: number, scale: number): void {
     if (!this.ctx) return;
     
@@ -521,32 +599,45 @@ class GPUNotebookRenderer {
     
     this.drawPaperTexture(ctx, width, height);
     
-    ctx.fillStyle = this.config.marginColor;
-    ctx.globalAlpha = 0.1;
-    ctx.fillRect(0, 0, this.config.margin, height);
+    // Margin zone with soft gradient
+    const marginPx = this.config.margin * MM_TO_PX;
+    const grad = ctx.createLinearGradient(0, 0, marginPx + 10, 0);
+    grad.addColorStop(0, `rgba(211, 47, 47, 0.15)`);
+    grad.addColorStop(0.7, `rgba(211, 47, 47, 0.12)`);
+    grad.addColorStop(1, `rgba(211, 47, 47, 0.0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, marginPx + 10, height);
+    
+    // Margin line
+    ctx.strokeStyle = this.config.marginColor;
+    ctx.globalAlpha = 0.65;
+    ctx.lineWidth = 1.5 * scale;
+    ctx.beginPath();
+    ctx.moveTo(marginPx, 0);
+    ctx.lineTo(marginPx, height);
+    ctx.stroke();
     ctx.globalAlpha = 1;
     
-    ctx.strokeStyle = this.config.marginColor;
-    ctx.lineWidth = 2 * scale;
-    ctx.beginPath();
-    ctx.moveTo(this.config.margin, 0);
-    ctx.lineTo(this.config.margin, height);
-    ctx.stroke();
-    
+    // Ruling lines
     ctx.strokeStyle = this.config.lineColor;
     ctx.globalAlpha = this.config.lineOpacity;
-    ctx.lineWidth = 1 * scale;
+    ctx.lineWidth = 0.8 * scale;
     
     const lineSpacingPx = this.config.lineSpacing * MM_TO_PX;
-    const startY = lineSpacingPx;
-    const endY = height;
     
-    for (let y = startY; y <= endY; y += lineSpacingPx) {
+    for (let y = lineSpacingPx; y <= height; y += lineSpacingPx) {
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(width, y);
       ctx.stroke();
     }
+    
+    // Top edge shadow
+    const topShadow = ctx.createLinearGradient(0, 0, 0, 12);
+    topShadow.addColorStop(0, 'rgba(0, 0, 0, 0.04)');
+    topShadow.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+    ctx.fillStyle = topShadow;
+    ctx.fillRect(0, 0, width, 12);
     
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -556,20 +647,38 @@ class GPUNotebookRenderer {
     const imageData = ctx.createImageData(width, height);
     const data = imageData.data;
     
-    const paperColor = this.hexToRgb(this.config.paperColor);
-    const baseR = paperColor.r * 255;
-    const baseG = paperColor.g * 255;
-    const baseB = paperColor.b * 255;
+    const paperRgb = this.hexToRgb(this.config.paperColor);
+    const baseR = paperRgb.r * 255;
+    const baseG = paperRgb.g * 255;
+    const baseB = paperRgb.b * 255;
     
-    for (let y = 0; y < height; y += 2) {
-      for (let x = 0; x < width; x += 2) {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
         const index = (y * width + x) * 4;
-        const noiseValue = this.noise(x * 0.01, y * 0.01);
-        const variation = (noiseValue * 0.5 + 0.5) * 10 - 5;
         
-        data[index] = Math.min(255, Math.max(0, baseR + variation));
-        data[index + 1] = Math.min(255, Math.max(0, baseG + variation));
-        data[index + 2] = Math.min(255, Math.max(0, baseB + variation));
+        // Warm/cool color temperature variation
+        const colorTemp = (this.fbm2D(x * 0.003, y * 0.003) - 0.5) * 7;
+        
+        // Coarse paper structure
+        const coarse = (this.fbm2D(x * 0.004, y * 0.004) - 0.5) * 14;
+        
+        // Fine fiber texture
+        const fine1 = (this.noise(x * 0.08, y * 0.08) - 0.5) * 7;
+        const fine2 = (this.noise(x * 0.25, y * 0.25) - 0.5) * 3.5;
+        
+        // Laid paper horizontal fibers
+        const laid = Math.sin(y * 0.8 + this.fbm2D(x * 0.01, y * 0.01) * 4) * 2.5;
+        
+        // Edge darkening
+        const edgeX = Math.min(1, x / 30) * Math.min(1, (width - x) / 30);
+        const edgeY = Math.min(1, y / 20) * Math.min(1, (height - y) / 20);
+        const edgeFactor = 0.94 + edgeX * edgeY * 0.06;
+        
+        const totalVariation = colorTemp + coarse + fine1 + fine2 + laid;
+        
+        data[index]     = Math.min(255, Math.max(0, (baseR + totalVariation) * edgeFactor));
+        data[index + 1] = Math.min(255, Math.max(0, (baseG + totalVariation * 0.9) * edgeFactor));
+        data[index + 2] = Math.min(255, Math.max(0, (baseB + totalVariation * 0.7) * edgeFactor));
         data[index + 3] = 255;
       }
     }
