@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realistic Notebook</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="notebook-container">
+        <div class="toggle-controls">
+            <button class="size-btn active" data-size="a4">A4</button>
+            <button class="size-btn" data-size="a5">A5</button>
+            <div class="ruling-info">
+                <span>Line Spacing: <span id="lineSpacing">8mm</span></span>
+                <span>Standard: <span id="standard">German DIN</span></span>
+            </div>
+        </div>
+        
+        <div class="notebook-page a4" id="notebookPage">
+            <div class="paper">
+                <div class="ruling"></div>
+                <div class="margin"></div>
+                <div class="page-content" contenteditable="true"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
