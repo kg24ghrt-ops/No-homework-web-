@@ -599,8 +599,9 @@ class GPUNotebookRenderer {
   }
 }
 
-// Initialize the notebook when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+ // Initialize the notebook when DOM is ready
+ if (typeof document !== 'undefined') {
+ document.addEventListener('DOMContentLoaded', () => {
   const notebookPage = document.getElementById('notebookPage');
   if (!notebookPage) {
     console.error('Notebook page element not found');
@@ -626,6 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('No Homework Notebook initialized with GPU acceleration');
 });
+}
 
 // Export for testing
 export { GPUNotebookRenderer, PAPER_STANDARDS, MM_TO_PX };
