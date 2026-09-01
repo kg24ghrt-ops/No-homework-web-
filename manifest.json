@@ -1,0 +1,86 @@
+{
+  "name": "No Homework Notebook",
+  "short_name": "Notebook",
+  "description": "Realistic A4/A5 notebook with drawing capabilities using universal ISO 216 paper standards",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9f7f1",
+  "theme_color": "#2c3e50",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-a4.png",
+      "sizes": "800x600",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "A4 Paper Notebook"
+    },
+    {
+      "src": "/screenshot-a5.png",
+      "sizes": "600x800",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "A5 Paper Notebook"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New A4 Notebook",
+      "short_name": "A4",
+      "description": "Create a new A4 size notebook",
+      "url": "/?size=a4"
+    },
+    {
+      "name": "New A5 Notebook",
+      "short_name": "A5",
+      "description": "Create a new A5 size notebook",
+      "url": "/?size=a5"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "iarc_rating_id": "",
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "protocol_handlers": [
+    {
+      "protocol": "web+nohomeworknotebook",
+      "url": "/open?url=%s"
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "name",
+      "text": "description",
+      "url": "link",
+      "files": [
+        {
+          "name": "image",
+          "accept": ["image/*"]
+        }
+      ]
+    }
+  }
+}

@@ -1,8 +1,8 @@
 {
   "name": "no-homework-web",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "No Homework — web implementation",
+  "description": "No Homework — Realistic A4/A5 notebook with GPU-accelerated rendering",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,8 +12,21 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
+    "lint": "echo 'No linting configured yet'",
+    "cap:init": "cap init",
+    "cap:add:android": "cap add android",
+    "cap:add:ios": "cap add ios",
     "cap:sync": "cap sync",
-    "cap:android": "cap open android"
+    "cap:sync:android": "cap sync android",
+    "cap:sync:ios": "cap sync ios",
+    "cap:open:android": "cap open android",
+    "cap:open:ios": "cap open ios",
+    "cap:copy": "cap copy",
+    "cap:copy:android": "cap copy android",
+    "cap:copy:ios": "cap copy ios",
+    "cap:update": "cap update",
+    "cap:update:android": "cap update android",
+    "cap:update:ios": "cap update ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
@@ -36,5 +49,27 @@
     "node": ">=24",
     "pnpm": ">=9"
   },
-  "packageManager": "pnpm@9.15.9"
+  "packageManager": "pnpm@9.15.9",
+  "keywords": [
+    "notebook",
+    "paper",
+    "a4",
+    "a5",
+    "drawing",
+    "canvas",
+    "webgl",
+    "gpu",
+    "capacitor",
+    "pwa"
+  ],
+  "author": "kg24ghrt-ops",
+  "license": "MIT",
+  "homepage": "https://github.com/kg24ghrt-ops/No-homework-web-",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kg24ghrt-ops/No-homework-web-.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kg24ghrt-ops/No-homework-web-/issues"
+  }
 }

@@ -7,95 +7,243 @@ on:
     branches: [main]
   workflow_dispatch:
 
-jobs:
-  build-web:
-    name: Build Web
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-          
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          
-          
-      - run: pnpm install
-      - run: pnpm build
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: dist/
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-  build-android:
-    name: Build Android APK
+jobs:
+  setup:
+    name: Setup and Cache Dependencies
     runs-on: ubuntu-latest
-    needs: build-web
+    outputs:
+      cache-hit: ${{ steps.cache-deps.outputs.cache-hit }}
     steps:
       - uses: actions/checkout@v4
       
-      - uses: pnpm/action-setup@v3
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
         with:
           version: 9
           
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'pnpm'
           
-      - uses: actions/setup-java@v4
+      - name: Cache node_modules
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+      
+      - name: Install dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+
+  lint:
+    name: Lint and Type Check
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+          
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+      
+      - name: Install dependencies if needed
+        run: pnpm install --frozen-lockfile || true
+        
+      - name: Type check
+        run: pnpm typecheck
+        
+      - name: Run tests
+        run: pnpm test
+
+  build-web:
+    name: Build Web
+    needs: [setup, lint]
+    runs-on: ubuntu-latest
+    outputs:
+      web-artifact-id: ${{ steps.upload.outputs.artifactid }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+          
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+      
+      - name: Install dependencies if needed
+        run: pnpm install --frozen-lockfile || true
+        
+      - name: Build web app
+        run: pnpm build
+        
+      - name: Upload web artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          retention-days: 1
+
+  build-android:
+    name: Build Android APK
+    needs: build-web
+    runs-on: ubuntu-latest
+    outputs:
+      apk-artifact-id: ${{ steps.upload.outputs.artifactid }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+          
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           
-      - uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
       
-      - run: pnpm install
-      - run: pnpm add -D @capacitor/core @capacitor/cli @capacitor/android
-      
-      - uses: actions/download-artifact@v4
+      - name: Install dependencies if needed
+        run: pnpm install --frozen-lockfile || true
+        
+      - name: Install Capacitor
+        run: pnpm add -D @capacitor/core @capacitor/cli @capacitor/android || true
+        
+      - name: Download web artifact
+        uses: actions/download-artifact@v4
         with:
           name: web-dist
           path: dist/
           
-      - run: npx cap sync android
-      
-      - name: Build Debug APK
-        run: cd android && ./gradlew assembleDebug
+      - name: Initialize Capacitor
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap init --name "No Homework Notebook" --app-id "com.nohomework.notebook" --web-dir "dist"
+          fi
+          npx cap add android
+          
+      - name: Sync Capacitor
+        run: npx cap sync android
         
-      - name: Build Release APK
-        run: cd android && ./gradlew assembleRelease
+      - name: Build Debug APK
+        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+        
+      - name: Build Release APK (if secrets available)
+        if: github.ref == 'refs/heads/main' && env.KEYSTORE_PASSWORD != ''
+        run: cd android && ./gradlew assembleRelease --no-daemon --stacktrace
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK artifact
+        id: upload
+        uses: actions/upload-artifact@v4
         with:
           name: apk
           path: |
             android/app/build/outputs/apk/debug/app-debug.apk
             android/app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 7
 
   release:
     name: Create Release
-    runs-on: ubuntu-latest
     needs: build-android
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
         with:
           name: apk
+          path: apk/
           
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            app-debug.apk
-            app-release-unsigned.apk
+            apk/app-debug.apk
+            apk/app-release-unsigned.apk
           tag_name: v${{ github.run_number }}
           generate_release_notes: true
+          prerelease: false
+          draft: false
+          name: No Homework Notebook v${{ github.run_number }}
+          body: |
+            ## What's New
+            
+            - Realistic A4/A5 paper rendering with universal ISO 216 standards
+            - GPU-accelerated rendering using WebGL (with Canvas 2D fallback)
+            - Improved drawing performance with atrament
+            - Optimized CI/CD pipeline with caching
+            - Better mobile support with Capacitor
+            
+            ## Features
+            
+            - Toggle between A4 (210x297mm) and A5 (148x210mm) paper sizes
+            - German DIN standard ruling lines
+            - Realistic paper texture using simplex noise
+            - Drawing mode with pressure-sensitive strokes
+            - Export as image functionality
+            
+            ## Technical Details
+            
+            - Uses WebGL for GPU-accelerated rendering when available
+            - Falls back to Canvas 2D for compatibility
+            - Optimized for both desktop and mobile devices
+            - Supports HiDPI displays
