@@ -173,9 +173,8 @@ jobs:
       - name: Initialize Capacitor
         run: |
           if [ ! -d "android" ]; then
-            npx cap init --name "No Homework Notebook" --app-id "com.nohomework.notebook" --web-dir "dist"
+            npx cap add android
           fi
-          npx cap add android
           
       - name: Sync Capacitor
         run: npx cap sync android
