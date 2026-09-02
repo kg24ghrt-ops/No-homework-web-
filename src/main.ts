@@ -5,6 +5,8 @@
  * engine and UI controller.
  */
 
+import './style.css';
+
 import { GPUNotebookRenderer } from './notebook/GPUNotebookRenderer';
 import { NotebookController } from './ui/notebookController';
 

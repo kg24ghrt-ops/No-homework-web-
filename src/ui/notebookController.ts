@@ -112,6 +112,11 @@ export class NotebookController {
 
   private toggleDrawingMode(enable: boolean): void {
     document.body.classList.toggle('drawing-mode', enable);
+    const drawBtn = document.getElementById('drawBtn');
+    if (drawBtn) {
+      drawBtn.classList.toggle('icon-btn-active', enable);
+      drawBtn.setAttribute('aria-pressed', String(enable));
+    }
     this.syncStatus();
   }
 

@@ -18,15 +18,18 @@ workflow.
 ## 2. Architecture / file map
 
 ```
-index.html                 Static page: paper CSS, controls, status bar,
-                           content area. Inline styles + <style> for the UI.
+index.html                 Static page: toolbar, status footer, notebook page.
+                           Modern UI styled with Tailwind utility classes
+                           (no inline <style> block).
 src/
-  main.ts                  Entry point. Creates the canvas, bootstraps the
-                           renderer + controller on DOMContentLoaded.
+  main.ts                  Entry point. Imports ./style.css, creates the canvas,
+                           bootstraps the renderer + controller on DOMContentLoaded.
                            Re-exports paper module for tests/external use.
   main.test.ts             Vitest tests for PAPER_STANDARDS / MM_TO_PX.
-  style.css                (Legacy) CSS dup of the inline styles; not imported
-                           by main.ts.
+  style.css                Tailwind entry (`@import "tailwindcss"` + @layer
+                           components: paper page, content-area, drawing-area,
+                           icon-btn, size-btn) and paper design tokens + print
+                           rules. Imported by main.ts.
   notebook/
     paper.ts               Data contract: PAPER_STANDARDS, DPI, MM_TO_PX,
                            NotebookConfig, createDefaultConfig(), hexToRgb().
@@ -72,6 +75,15 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
       ink weight, and paper size. Shows a "Saved" indicator.
 - [x] Paper size choice remembered across reloads.
 
+### UI / Design
+- [x] Tailwind CSS (v4 via `@tailwindcss/vite`) set up — `style.css` imports it.
+- [x] Modern toolbar redesign: segmented A4/A5 control, icon buttons with inline
+      SVG icons, ink color + thickness, actions grouped with dividers.
+- [x] Brand row header with app icon + tagline, status footer with GPU / renderer
+      / spacing / standard readouts and an Auto-save chip.
+- [x] Responsive layout that stacks on small screens; print styles hide chrome.
+- [x] Draw button shows an active/selected state while drawing mode is on.
+
 ### CI/CD & Android
 - [x] GitHub Actions workflow builds web + Android APK and publishes a GitHub
       release on every push to `main`.
@@ -85,6 +97,7 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
 
 | Date | Change |
 |------|--------|
+| 2026-09-02 | UI overhaul: moved to Tailwind CSS (v4), redesigned toolbar with inline SVG icons, segmented paper-size control, active draw-button state, brand header and status footer. `style.css` is now the Tailwind entry (imported by `main.ts`); removed the inline `<style>` block. |
 | 2026-09-02 | Fixed broken WebGL rendering (was drawing to an offscreen framebuffer never shown). Added ink controls + auto-save/restore. Fixed drawing layer blocking text editing. Enabled in-place APK updates (versionCode from package.json) + bumped version to 2.1.0. Committed `05c1c39d`, pushed; CI green, release v13 published. |
 | 2026-09-01 | Improved paper realism (multi-octave noise, domain warping, edge effects, better ruling lines); fixed WebGL uniform mm→px bugs; upgraded Canvas 2D fallback. |
 | 2026-09-01 | Refactored monolithic `src/main.ts` into `src/notebook/` + `src/ui/` + `src/engines/` + `src/pages/`. |
@@ -103,7 +116,7 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
 | Web Storage | native | `notebookController` | `localStorage` keys: `nohomework.notebook.v1` (whole state), `nohomework.papersize`. |
 | Capacitor | ^8.5.0 | `capacitor.config.ts`, CI | Android APK build; `cap add/sync/android`; config puts `dist/` in native shell. |
 | Vite | ^8.2.2 | build | `vite build` → `dist/`; `vite-plugin-pwa` for PWA manifest/service worker. |
-| Tailwind | ^4.3.3 | vite | Installed; currently unused by markup. |
+| Tailwind | ^4.3.3 | `src/style.css`, dark-mode utilities | v4 via `@tailwindcss/vite`; UI styled with utility classes + `@apply`. |
 | TypeScript | ^7.0.2 | typecheck | `tsc --noEmit` runs in CI lint job. |
 | Vitest | ^4.1.11 | tests | `pnpm test` (runs `main.test.ts`). |
 
@@ -119,8 +132,6 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
 
 - [ ] `exportAsPDF()` is a stub ("not yet implemented") — needs a PDF library
       (e.g. jsPDF) or manual PDF generation.
-- [ ] `src/style.css` duplicates the inline `<style>` block in `index.html`;
-      it is not imported anywhere. Inline styles are the source of truth.
 - [ ] `src/engines/` and `src/pages/` are empty placeholders — no code yet.
 - [ ] Only `assembleDebug` is reliably built; `assembleRelease` is skipped
       unless signing keystore secrets are configured.
