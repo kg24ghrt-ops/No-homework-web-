@@ -91,10 +91,55 @@ export const FRAGMENT_SHADER_SOURCE = `
     float topShadow = smoothstep(resolution.y, resolution.y - 15.0, pos.y) * 0.04;
     paper -= vec3(topShadow);
 
-    // --- Subtle specular highlight (light from top-left) ---
-    float specDist = length((pos / resolution - vec2(0.25, 0.85)) * vec2(1.0, 0.7));
-    float specular = exp(-specDist * specDist * 6.0) * 0.02;
-    paper += vec3(specular);
+    // ---- Realistic lighting ------------------------------------------------
+    // Vector from paper center (paper curled slightly toward the viewer).
+    vec2 ndc = uv * 2.0 - 1.0;
+    vec3 center = vec3(0.5, 0.6, 0.0);
+
+    // A soft directional key light from the top-left casts a gradual falloff
+    // across the page (bright top-left, dimmer bottom-right) plus a cool
+    // ambient fill from the opposite side.
+    float dirLight = 0.82 + 0.24 * clamp(-ndc.x * 0.5 - ndc.y * 0.5, -1.0, 1.0);
+    float falloffGrid = mix(1.08, 0.88, ndc.y * 0.5 + 0.5);      // vertical gradient
+    float falloffSide = mix(1.05, 0.93, ndc.x * 0.5 + 0.5);      // horizontal gradient
+    float ambient = 0.30 + 0.18 * (0.5 - ndc.x * 0.5);           // fill from the right
+
+    // Subtle curvature: the page bows slightly, so the center catches more
+    // light and the edges fall into a soft shadow.
+    float bulge = 1.0 - smoothstep(0.0, 1.1, length((ndc - center.xy)) * 1.3);
+    vec3 lighting = vec3(
+      (dirLight + ambient) * falloffGrid * falloffSide,
+      (dirLight + ambient) * falloffGrid * falloffSide,
+      (dirLight + ambient * 0.9) * falloffGrid * falloffSide
+    ) * (1.04 - 0.05 * bulge);
+
+    // Paper curl occlusion near the borders: darker, slightly warmer shadow
+    // close to the sheet edge.
+    float curlX = smoothstep(28.0, 0.0, min(pos.x, resolution.x - pos.x)) * 0.5
+                + smoothstep(18.0, 0.0, min(pos.y, resolution.y - pos.y)) * 0.5;
+    lighting *= 1.0 - curlX * 0.16;
+
+    paper *= lighting;
+
+    // Specular sheen: a large, faint, soft highlight from the top-left plus a
+    // tighter, cooler glint that fades toward the page bottom.
+    vec2 sheen = ndc - vec2(-0.45, 0.55);
+    float sheenFalloff = exp(-dot(sheen, sheen) * 1.1);
+    vec2 glint = ndc - vec2(0.15, 0.35);
+    float glintFalloff = exp(-dot(glint, glint) * 4.0);
+    vec3 specular = vec3(1.0, 0.99, 0.96) * (0.09 * sheenFalloff)
+                  + vec3(0.86, 0.92, 1.0) * (0.10 * glintFalloff);
+
+    // Add a faint, warm bounce light along the bottom edge (light reflecting
+    // back off the surface the paper rests on).
+    float bounce = pow(clamp((ndc.y - 0.35) * 0.5 + 0.5, 0.0, 1.0), 2.0) * 0.03;
+    specular += vec3(1.0, 0.92, 0.82) * bounce;
+
+    paper += specular;
+    // ------------------------------------------------------------------------
+
+    // --- Subtle color temperature lift so the lit paper reads as warm paper ---
+    paper = mix(paper, paper * vec3(1.02, 0.995, 0.965), 0.35);
 
     vec3 color = paper;
 

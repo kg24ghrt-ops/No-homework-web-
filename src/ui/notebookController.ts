@@ -2,17 +2,23 @@
  * NotebookController - wires the DOM (buttons, status readouts) to a
  * GPUNotebookRenderer instance. Keeps DOM/UI concerns out of the renderer.
  *
- * Also provides two app features:
+ * Also provides app features:
  *  - Ink controls (color + pen thickness) applied to the drawing layer.
  *  - Auto-save/restore: the typed content and drawing are persisted to
  *    localStorage and restored on reload.
+ *  - Download PNG: composites the page and saves it to the device gallery on
+ *    Android/iOS (via Capacitor) or downloads a file on the web.
  */
+
+import { Capacitor } from '@capacitor/core';
+import { Media } from '@capacitor-community/media';
 
 import { PAPER_STANDARDS } from '../notebook/paper';
 import type { PaperSize } from '../notebook/paper';
 import type { GPUNotebookRenderer } from '../notebook/GPUNotebookRenderer';
 
 const STORAGE_KEY = 'nohomework.notebook.v1';
+const ALBUM_NAME = 'No Homework';
 
 interface SavedState {
   text: string;
@@ -39,6 +45,12 @@ export class NotebookController {
   }
 
   private bindButtons(): void {
+    // On native, the Download action saves straight to the device gallery.
+    const exportTitleBtn = document.getElementById('exportBtn');
+    if (exportTitleBtn && Capacitor.isNativePlatform()) {
+      exportTitleBtn.title = 'Save the page to your gallery';
+    }
+
     document.querySelectorAll('.size-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const size = btn.getAttribute('data-size') as PaperSize;
@@ -99,6 +111,26 @@ export class NotebookController {
 
   private exportPage(): void {
     const scale = this.getExportScale();
+    const composite = this.buildPageComposite(scale);
+    const dpi = Math.round(scale * 96);
+    const fileName = `notebook-${this.renderer.size}-${dpi}dpi-${Date.now()}`;
+
+    // On Android/iOS, save straight to the device gallery. On the web, fall
+    // back to a normal file download.
+    if (Capacitor.isNativePlatform()) {
+      this.saveToGallery(composite.toDataURL('image/png'), fileName)
+        .then(() => this.setSaveStatus('Saved to gallery'))
+        .catch(() => {
+          this.downloadWeb(composite, `${fileName}.png`);
+          this.setSaveStatus('Saved (download)');
+        });
+      return;
+    }
+
+    this.downloadWeb(composite, `${fileName}.png`);
+  }
+
+  private buildPageComposite(scale: number): HTMLCanvasElement {
     const composite = this.renderer.buildComposite(scale);
 
     // Overlay the typed text onto the finished page.
@@ -109,12 +141,51 @@ export class NotebookController {
       }
     }
 
-    const dataUrl = composite.toDataURL('image/png');
+    return composite;
+  }
+
+  private downloadWeb(canvas: HTMLCanvasElement, fileName: string): void {
     const link = document.createElement('a');
-    link.href = dataUrl;
-    const dpi = Math.round(scale * 96);
-    link.download = `notebook-${this.renderer.size}-${dpi}dpi-${Date.now()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.download = fileName;
     link.click();
+  }
+
+  private async ensureGalleryAlbum(): Promise<string | undefined> {
+    try {
+      if (Capacitor.getPlatform() === 'android') {
+        const { path } = await Media.getAlbumsPath();
+        const { albums } = await Media.getAlbums();
+        const existing = albums.find(
+          a => a.name === ALBUM_NAME && a.identifier.startsWith(path)
+        );
+        if (existing) return existing.identifier;
+        await Media.createAlbum({ name: ALBUM_NAME });
+        return `${path}/${ALBUM_NAME}`;
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async saveToGallery(dataUrl: string, fileName: string): Promise<void> {
+    const albumIdentifier = await this.ensureGalleryAlbum();
+    await Media.savePhoto({
+      path: dataUrl,
+      albumIdentifier,
+      fileName
+    });
+  }
+
+  private setSaveStatus(message: string): void {
+    const el = document.getElementById('saveStatus');
+    if (el) {
+      el.textContent = message;
+      window.setTimeout(() => {
+        el.textContent = 'Auto-save';
+      }, 2500);
+    }
   }
 
   /**
@@ -343,12 +414,6 @@ export class NotebookController {
   }
 
   private showSaved(): void {
-    const el = document.getElementById('saveStatus');
-    if (el) {
-      el.textContent = 'Saved';
-      window.setTimeout(() => {
-        el.textContent = 'Auto-save';
-      }, 1500);
-    }
+    this.setSaveStatus('Saved');
   }
 }

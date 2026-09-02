@@ -14,6 +14,17 @@ import { PAPER_STANDARDS, MM_TO_PX, createDefaultConfig, hexToRgb } from './pape
 import type { NotebookConfig, PaperSize } from './paper';
 import { VERTEX_SHADER_SOURCE, FRAGMENT_SHADER_SOURCE } from './shaders';
 
+/** Clamp `v` into the inclusive range [min, max]. */
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v));
+}
+
+/** GLSL-style smoothstep: smooth interpolation between two edges. */
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
 export class GPUNotebookRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null = null;
@@ -493,8 +504,51 @@ export class GPUNotebookRenderer {
     const baseB = paperRgb.b * 255;
 
     for (let y = 0; y < height; y++) {
+      // Normalized device coords (-1..1) with Y flipped to match NDC (top = +1).
+      const ny = 1 - (y / height) * 2;
+      const curlY = smoothstep(18, 0, Math.min(y, height - y)) * 0.5;
+
       for (let x = 0; x < width; x++) {
         const index = (y * width + x) * 4;
+        const nx = (x / width) * 2 - 1;
+
+        // Lighting model mirrors the WebGL shader so screen + exports match.
+        const dirLight = 0.82 + 0.24 * clamp(-nx * 0.5 - ny * 0.5, -1, 1);
+        const falloffGrid = 1.08 + (0.88 - 1.08) * (ny * 0.5 + 0.5);
+        const falloffSide = 1.05 + (0.93 - 1.05) * (nx * 0.5 + 0.5);
+        const ambient = 0.30 + 0.18 * (0.5 - nx * 0.5);
+
+        const bulge = 1 - smoothstep(0, 1.1, Math.hypot(nx - 0.5, ny - 0.6) * 1.3);
+        let lr = (dirLight + ambient) * falloffGrid * falloffSide * (1.04 - 0.05 * bulge);
+        let lg = (dirLight + ambient) * falloffGrid * falloffSide * (1.04 - 0.05 * bulge);
+        let lb = (dirLight + ambient * 0.9) * falloffGrid * falloffSide * (1.04 - 0.05 * bulge);
+
+        // Paper curl occlusion near the borders.
+        const curlX = smoothstep(28, 0, Math.min(x, width - x)) * 0.5;
+        const occl = 1 - (curlX + curlY) * 0.16;
+        lr *= occl;
+        lg *= occl;
+        lb *= occl;
+
+        // Specular sheen (top-left) + cool glint.
+        const sheenX = nx + 0.45, sheenY = ny - 0.55;
+        const sheenFalloff = Math.exp(-(sheenX * sheenX + sheenY * sheenY) * 1.1);
+        const glintX = nx - 0.15, glintY = ny - 0.35;
+        const glintFalloff = Math.exp(-(glintX * glintX + glintY * glintY) * 4.0);
+        lr += 1.0 * 0.09 * sheenFalloff + 0.86 * 0.10 * glintFalloff;
+        lg += 0.99 * 0.09 * sheenFalloff + 0.92 * 0.10 * glintFalloff;
+        lb += 0.96 * 0.09 * sheenFalloff + 1.0 * 0.10 * glintFalloff;
+
+        // Warm bounce light along the bottom edge.
+        const bounced = Math.pow(clamp((ny - 0.35) * 0.5 + 0.5, 0, 1), 2) * 0.03;
+        lr += 1.0 * bounced;
+        lg += 0.92 * bounced;
+        lb += 0.82 * bounced;
+
+        // Subtle warm color temperature lift.
+        lr *= 1.02;
+        lg *= 0.995;
+        lb *= 0.965;
 
         // Warm/cool color temperature variation
         const colorTemp = (this.fbm2D(x * 0.003, y * 0.003) - 0.5) * 7;
@@ -516,9 +570,9 @@ export class GPUNotebookRenderer {
 
         const totalVariation = colorTemp + coarse + fine1 + fine2 + laid;
 
-        data[index]     = Math.min(255, Math.max(0, (baseR + totalVariation) * edgeFactor));
-        data[index + 1] = Math.min(255, Math.max(0, (baseG + totalVariation * 0.9) * edgeFactor));
-        data[index + 2] = Math.min(255, Math.max(0, (baseB + totalVariation * 0.7) * edgeFactor));
+        data[index]     = Math.min(255, Math.max(0, (baseR + totalVariation) * edgeFactor * lr));
+        data[index + 1] = Math.min(255, Math.max(0, (baseG + totalVariation * 0.9) * edgeFactor * lg));
+        data[index + 2] = Math.min(255, Math.max(0, (baseB + totalVariation * 0.7) * edgeFactor * lb));
         data[index + 3] = 255;
       }
     }

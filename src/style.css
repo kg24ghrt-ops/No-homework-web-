@@ -55,6 +55,27 @@
         min-height: 58vh;
     }
 
+    /* A soft, non-interactive lighting sheen across the paper sheet to echo
+       the directional key light the renderers paint. pointer-events none so it
+       never blocks typing or drawing. */
+    .notebook-page::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        pointer-events: none;
+        background:
+            radial-gradient(120% 90% at 15% 8%,
+                rgba(255, 255, 255, 0.28) 0%,
+                rgba(255, 255, 255, 0.04) 42%,
+                transparent 65%),
+            radial-gradient(90% 60% at 100% 100%,
+                rgba(255, 214, 178, 0.10) 0%,
+                transparent 55%);
+        mix-blend-mode: soft-light;
+        opacity: 0.7;
+    }
+
     /* Typing layer sits on top of the rendered paper */
     .content-area {
         position: absolute;

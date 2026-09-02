@@ -77,6 +77,18 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
 - [x] Quality selector in the toolbar (Screen / 150 / 300 / 600 DPI); the paper
       is re-rendered at that resolution so exports stay sharp.
 - [x] Filename encodes paper size + DPI + timestamp.
+- [x] **Save to device gallery on Android/iOS**: on a native build the button
+      saves the PNG straight to the gallery (via `@capacitor-community/media`),
+      with a web file-download fallback.
+
+### Lighting / realism
+- [x] Realistic lighting model (WebGL shader + matched Canvas 2D): directional
+      key light from the top-left, ambient fill, vertical/horizontal falloff,
+      page-bulge highlight, paper-curl occlusion at the borders, specular sheen
+      + cool glint, warm bottom bounce light, and a subtle warm temperature
+      lift.
+- [x] A soft non-interactive CSS sheen overlay on the paper sheet reinforces the
+      lighting on screen.
 
 ### Persistence
 - [x] **Auto-save/restore** to `localStorage`: typed text, drawing, ink color,
@@ -111,6 +123,7 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
 
 | Date | Change |
 |------|--------|
+| 2026-09-02 | Native gallery save: on Android/iOS the Download button saves the PNG to the device gallery via `@capacitor-community/media` (creates a "No Homework" album), web falls back to file download. Added realistic lighting (directional key, ambient, falloff, curl occlusion, sheen/glint, bounce light) to both the WebGL shader and the Canvas 2D texture, plus a CSS sheen overlay on the page. |
 | 2026-09-02 | "Download PNG" now exports the full finished page — paper + ruling lines + margin, typed text, and drawn ink composited into one image, re-rendered at the chosen DPI (Screen/150/300/600) for sharp output. Added `renderPaperAt`/`buildComposite` + renderer getters (`paperSizePx`, `marginPx`, `lineSpacingPx`); controller adds word-wrapped text overlay + quality selector. Documented the latent WebGL-vs-2D same-canvas context limitation. |
 | 2026-09-02 | UI overhaul: moved to Tailwind CSS (v4), redesigned toolbar with inline SVG icons, segmented paper-size control, active draw-button state, brand header and status footer. `style.css` is now the Tailwind entry (imported by `main.ts`); removed the inline `<style>` block. |
 | 2026-09-02 | Fixed broken WebGL rendering (was drawing to an offscreen framebuffer never shown). Added ink controls + auto-save/restore. Fixed drawing layer blocking text editing. Enabled in-place APK updates (versionCode from package.json) + bumped version to 2.1.0. Committed `05c1c39d`, pushed; CI green, release v13 published. |
@@ -129,7 +142,8 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
 | WebGL 1/2 | native | shaders + renderer | Full-screen triangle, `gl_FragColor`, uniforms: `resolution`, `time`, `lineSpacing`, `margin`, `lineColor`, `lineOpacity`, `paperColor`, `marginColor`; attribute `position`. |
 | Canvas 2D | native | renderer (fallback) | `createImageData/putImageData` per-pixel texture; gradients for margin + top shadow; `toDataURL` for export. |
 | Web Storage | native | `notebookController` | `localStorage` keys: `nohomework.notebook.v1` (whole state), `nohomework.papersize`. |
-| Capacitor | ^8.5.0 | `capacitor.config.ts`, CI | Android APK build; `cap add/sync/android`; config puts `dist/` in native shell. |
+| `@capacitor-community/media` | ^9.1.0 | `notebookController` | Native save-to-gallery. `getAlbums()`, `getAlbumsPath()`, `createAlbum()`, `savePhoto({path, albumIdentifier, fileName})`. Imported only in the controller. |
+| Capacitor | ^8.5.0 | `capacitor.config.ts`, CI | Android APK build; `cap add/sync/android`; config puts `dist/` in native shell; `Capacitor.isNativePlatform()` used to pick gallery vs. download. |
 | Vite | ^8.2.2 | build | `vite build` → `dist/`; `vite-plugin-pwa` for PWA manifest/service worker. |
 | Tailwind | ^4.3.3 | `src/style.css`, dark-mode utilities | v4 via `@tailwindcss/vite`; UI styled with utility classes + `@apply`. |
 | TypeScript | ^7.0.2 | typecheck | `tsc --noEmit` runs in CI lint job. |
