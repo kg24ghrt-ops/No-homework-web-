@@ -69,6 +69,25 @@ export class GPUNotebookRenderer {
     return this.atramentCanvas;
   }
 
+  /** Paper dimensions in CSS pixels (at 96 DPI). */
+  get paperSizePx(): { width: number; height: number } {
+    const standard = PAPER_STANDARDS[this.currentSize];
+    return {
+      width: standard.width * MM_TO_PX,
+      height: standard.height * MM_TO_PX
+    };
+  }
+
+  /** Current left margin in CSS pixels. */
+  get marginPx(): number {
+    return this.config.margin * MM_TO_PX;
+  }
+
+  /** Current ruling line spacing in CSS pixels. */
+  get lineSpacingPx(): number {
+    return this.config.lineSpacing * MM_TO_PX;
+  }
+
   private initCanvas(): void {
     const ctx = this.canvas.getContext('2d', {
       alpha: true,
@@ -344,18 +363,36 @@ export class GPUNotebookRenderer {
 
   private renderCanvas2D(width: number, height: number, scale: number): void {
     if (!this.ctx) return;
+    this.drawPaper2D(this.ctx, width, height, scale);
+  }
 
-    const ctx = this.ctx;
+  /**
+   * Draw the paper surface (base color, texture, margin, ruling lines, top
+   * shadow) onto an arbitrary 2D context. `width`/`height` are the CSS-scaled
+   * dimensions and `scale` maps them to the target's pixel density.
+   */
+  private drawPaper2D(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    scale: number
+  ): void {
+    const marginPx = this.config.margin * MM_TO_PX;
+    const lineSpacingPx = this.config.lineSpacing * MM_TO_PX;
+    const deviceW = Math.round(width * scale);
+    const deviceH = Math.round(height * scale);
+
     ctx.save();
     ctx.scale(scale, scale);
 
     ctx.fillStyle = this.config.paperColor;
     ctx.fillRect(0, 0, width, height);
 
-    this.drawPaperTexture(ctx, width, height);
+    // putImageData ignores the ctx transform, so generate the texture at the
+    // device resolution to cover the whole page at any export scale.
+    this.drawPaperTexture(ctx, deviceW, deviceH);
 
     // Margin zone with soft gradient
-    const marginPx = this.config.margin * MM_TO_PX;
     const grad = ctx.createLinearGradient(0, 0, marginPx + 10, 0);
     grad.addColorStop(0, `rgba(211, 47, 47, 0.15)`);
     grad.addColorStop(0.7, `rgba(211, 47, 47, 0.12)`);
@@ -378,8 +415,6 @@ export class GPUNotebookRenderer {
     ctx.globalAlpha = this.config.lineOpacity;
     ctx.lineWidth = 0.8 * scale;
 
-    const lineSpacingPx = this.config.lineSpacing * MM_TO_PX;
-
     for (let y = lineSpacingPx; y <= height; y += lineSpacingPx) {
       ctx.beginPath();
       ctx.moveTo(0, y);
@@ -396,6 +431,56 @@ export class GPUNotebookRenderer {
 
     ctx.globalAlpha = 1;
     ctx.restore();
+  }
+
+  /**
+   * Render a fresh, high-resolution paper surface onto the given 2D context so
+   * exports stay sharp regardless of the on-screen (WebGL/2D) canvas. The
+   * texture is regenerated at the target resolution.
+   */
+  public renderPaperAt(ctx: CanvasRenderingContext2D, targetWidth: number, targetHeight: number): void {
+    const standard = PAPER_STANDARDS[this.currentSize];
+    const cssWidth = standard.width * MM_TO_PX;
+    const cssHeight = standard.height * MM_TO_PX;
+
+    // Width ratio maps CSS paper coords to target pixels.
+    const scale = targetWidth / cssWidth;
+    this.drawPaper2D(ctx, cssWidth, cssHeight, scale);
+  }
+
+  /**
+   * Composite the paper and the drawn ink onto a new canvas sized for export,
+   * scaled by `factor` (1 = on-screen 96 DPI CSS pixels). Returns the canvas.
+   */
+  public buildComposite(factor: number): HTMLCanvasElement {
+    const { width, height } = this.paperSizePx;
+    const out = document.createElement('canvas');
+    out.width = Math.round(width * factor);
+    out.height = Math.round(height * factor);
+    const ctx = out.getContext('2d');
+    if (!ctx) return out;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // Fresh paper at the target resolution.
+    this.renderPaperAt(ctx, out.width, out.height);
+
+    // The drawing (ink) layer, scaled to the same output pixels.
+    if (this.atramentCanvas.width) {
+      const paperPx = this.paperSizePx;
+      const cssScale = out.width / paperPx.width;
+      ctx.drawImage(
+        this.atramentCanvas,
+        0, 0,
+        this.atramentCanvas.width, this.atramentCanvas.height,
+        0, 0,
+        Math.round(this.atramentCanvas.width * cssScale),
+        Math.round(this.atramentCanvas.height * cssScale)
+      );
+    }
+
+    return out;
   }
 
   private drawPaperTexture(ctx: CanvasRenderingContext2D, width: number, height: number): void {

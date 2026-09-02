@@ -70,14 +70,110 @@ export class NotebookController {
 
     const exportBtn = document.getElementById('exportBtn');
     if (exportBtn) {
-      exportBtn.addEventListener('click', () => {
-        const dataUrl = this.renderer.exportAsImage();
-        const link = document.createElement('a');
-        link.href = dataUrl;
-        link.download = `notebook-${this.renderer.size}-${Date.now()}.png`;
-        link.click();
+      exportBtn.addEventListener('click', () => this.exportPage());
+    }
+
+    const exportScale = document.getElementById('exportScale') as HTMLSelectElement | null;
+    if (exportScale) {
+      exportScale.addEventListener('change', () => {
+        this.syncExportLabel();
+        this.debouncedSave();
       });
     }
+  }
+
+  private syncExportLabel(): void {
+    const el = document.getElementById('exportScale') as HTMLSelectElement | null;
+    const statusEl = document.getElementById('exportStatus');
+    if (!el || !statusEl) return;
+    const scale = Number(el.value);
+    statusEl.textContent = scale === 1
+      ? 'Screen'
+      : `${Math.round(scale * 96)} DPI`;
+  }
+
+  private getExportScale(): number {
+    const el = document.getElementById('exportScale') as HTMLSelectElement | null;
+    return Number(el?.value || 300 / 96);
+  }
+
+  private exportPage(): void {
+    const scale = this.getExportScale();
+    const composite = this.renderer.buildComposite(scale);
+
+    // Overlay the typed text onto the finished page.
+    if (this.contentArea && this.contentArea.textContent?.trim()) {
+      const ctx = composite.getContext('2d');
+      if (ctx) {
+        this.drawContentText(ctx, composite.width, composite.height);
+      }
+    }
+
+    const dataUrl = composite.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    const dpi = Math.round(scale * 96);
+    link.download = `notebook-${this.renderer.size}-${dpi}dpi-${Date.now()}.png`;
+    link.click();
+  }
+
+  /**
+   * Rasterize the typed content onto the export canvas using the same metrics
+   * as the content area (Courier, line height = ruling spacing, left margin).
+   */
+  private drawContentText(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const { paperSizePx, marginPx, lineSpacingPx } = this.renderer;
+    const cssScale = width / paperSizePx.width;
+
+    const fontSize = 16 * cssScale; // ~1rem, matching the content area
+    const lineHeight = lineSpacingPx * cssScale;
+    const left = marginPx * cssScale;
+    const top = lineHeight * 0.75;
+    const right = width - marginPx * cssScale;
+    const wrapWidth = right - left;
+
+    const text = this.contentArea?.textContent || '';
+    const lines = this.wrapText(text, ctx, fontSize, wrapWidth);
+
+    ctx.save();
+    ctx.font = `${fontSize}px 'Courier New', monospace`;
+    ctx.fillStyle = '#1a1a1a';
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+
+    lines.forEach((line, i) => {
+      ctx.fillText(line, left, top + i * lineHeight);
+    });
+
+    ctx.restore();
+  }
+
+  private wrapText(text: string, ctx: CanvasRenderingContext2D, fontSize: number, maxWidth: number): string[] {
+    const paragraphs = text.split('\n');
+    const lines: string[] = [];
+
+    for (const paragraph of paragraphs) {
+      if (paragraph === '') {
+        lines.push('');
+        continue;
+      }
+      const words = paragraph.split(/\s+/).filter(Boolean);
+      let current = '';
+      for (const word of words) {
+        const candidate = current ? `${current} ${word}` : word;
+        if (ctx.measureText(candidate).width <= maxWidth || !current) {
+          current = candidate;
+        } else {
+          lines.push(current);
+          current = word;
+        }
+      }
+      if (current) {
+        lines.push(current);
+      }
+    }
+
+    return lines;
   }
 
   private bindInkControls(): void {

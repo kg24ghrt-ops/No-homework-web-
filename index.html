@@ -79,6 +79,17 @@
 
                 <!-- Actions -->
                 <div class="ml-auto flex items-center gap-1">
+                    <label for="exportScale"
+                        class="hidden items-center gap-1 pl-2 text-xs font-medium text-slate-500 sm:flex">
+                        Quality
+                    </label>
+                    <select id="exportScale" title="Export quality"
+                        class="h-8 cursor-pointer rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none">
+                        <option value="1">Screen</option>
+                        <option value="1.5625" selected>150 DPI</option>
+                        <option value="3.125">300 DPI</option>
+                        <option value="6.25">600 DPI</option>
+                    </select>
                     <button id="clearBtn" class="icon-btn" title="Clear the page">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                             stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
@@ -89,13 +100,13 @@
                         </svg>
                         Clear
                     </button>
-                    <button id="exportBtn" class="icon-btn" title="Export as PNG">
+                    <button id="exportBtn" class="icon-btn icon-btn-active" title="Download the page as a PNG">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                             stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                             <path d="M7 10l5 5 5-5M12 15V3" />
                         </svg>
-                        Export
+                        Download PNG
                     </button>
                 </div>
             </div>
@@ -136,6 +147,11 @@
                 <span class="inline-flex items-center gap-1.5 text-slate-600">
                     <span class="text-slate-500">Standard:</span>
                     <span id="standard" class="font-medium text-slate-700">German DIN</span>
+                </span>
+
+                <span class="inline-flex items-center gap-1.5 text-slate-600">
+                    <span class="text-slate-500">Export:</span>
+                    <span id="exportStatus" class="font-medium text-slate-700">150 DPI</span>
                 </span>
             </div>
 

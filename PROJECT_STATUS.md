@@ -59,16 +59,24 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
       specular highlight, film grain).
 - [x] ISO 216 paper sizes A4 (210×297mm) and A5 (148×210mm).
 - [x] German DIN ruling lines + red margin line/zone.
-- [x] WebGL rendering; **fixed to render to the visible canvas directly**.
-- [x] Canvas 2D fallback for when WebGL is unavailable.
+- [x] WebGL rendering; renders to the on-screen canvas directly.
+- [x] Canvas 2D fallback for when WebGL is unavailable; paper can be re-rendered
+      at any resolution for crisp exports (`renderPaperAt`).
 - [x] HiDPI (devicePixelRatio) sizing.
 - [x] Atrament drawing layer (pressure-sensitive strokes).
 
 ### Drawing (Atrament)
 - [x] Draw mode toggle (`drawBtn`).
 - [x] Clear page (`clearBtn`).
-- [x] Export drawing as PNG (`exportBtn`).
 - [x] **Ink color picker + pen thickness selector** (Fine/Medium/Bold/Marker).
+
+### Export / Download
+- [x] **Download the full page as a PNG** (`Download PNG` button): composites the
+      paper surface + ruling lines + margin, the typed text, and the drawn ink
+      into a single image — not just the sketch layer.
+- [x] Quality selector in the toolbar (Screen / 150 / 300 / 600 DPI); the paper
+      is re-rendered at that resolution so exports stay sharp.
+- [x] Filename encodes paper size + DPI + timestamp.
 
 ### Persistence
 - [x] **Auto-save/restore** to `localStorage`: typed text, drawing, ink color,
@@ -84,6 +92,12 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
 - [x] Responsive layout that stacks on small screens; print styles hide chrome.
 - [x] Draw button shows an active/selected state while drawing mode is on.
 
+### Notes / caveats
+- WebGL and Canvas 2D contexts are requested on the same visible canvas during
+  init; browsers only allow one context type per canvas, so the WebGL path
+  currently falls back to the Canvas 2D renderer (GPU status shows "Not
+  available"). The 2D path produces the same page and is reused for exports.
+
 ### CI/CD & Android
 - [x] GitHub Actions workflow builds web + Android APK and publishes a GitHub
       release on every push to `main`.
@@ -97,6 +111,7 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
 
 | Date | Change |
 |------|--------|
+| 2026-09-02 | "Download PNG" now exports the full finished page — paper + ruling lines + margin, typed text, and drawn ink composited into one image, re-rendered at the chosen DPI (Screen/150/300/600) for sharp output. Added `renderPaperAt`/`buildComposite` + renderer getters (`paperSizePx`, `marginPx`, `lineSpacingPx`); controller adds word-wrapped text overlay + quality selector. Documented the latent WebGL-vs-2D same-canvas context limitation. |
 | 2026-09-02 | UI overhaul: moved to Tailwind CSS (v4), redesigned toolbar with inline SVG icons, segmented paper-size control, active draw-button state, brand header and status footer. `style.css` is now the Tailwind entry (imported by `main.ts`); removed the inline `<style>` block. |
 | 2026-09-02 | Fixed broken WebGL rendering (was drawing to an offscreen framebuffer never shown). Added ink controls + auto-save/restore. Fixed drawing layer blocking text editing. Enabled in-place APK updates (versionCode from package.json) + bumped version to 2.1.0. Committed `05c1c39d`, pushed; CI green, release v13 published. |
 | 2026-09-01 | Improved paper realism (multi-octave noise, domain warping, edge effects, better ruling lines); fixed WebGL uniform mm→px bugs; upgraded Canvas 2D fallback. |
@@ -121,22 +136,30 @@ capacitor.config.ts        Capacitor app config (appId com.nohomework.notebook).
 | Vitest | ^4.1.11 | tests | `pnpm test` (runs `main.test.ts`). |
 
 ### Public surface of `GPUNotebookRenderer`
-- getters: `size` (`'a4' | 'a5'`), `isWebGL` (bool), `drawingCanvas` (`HTMLCanvasElement`).
+- getters: `size` (`'a4' | 'a5'`), `isWebGL` (bool), `drawingCanvas`, `paperSizePx`
+  (`{width, height}` CSS px), `marginPx` (CSS px), `lineSpacingPx` (CSS px).
 - methods: `setPaperSize`, `setLineSpacing`, `setRulingStandard`, `setInkColor(color)`,
-  `setInkWeight(weight)`, `resize()`, `clearAll()`, `render()`, `exportAsImage()`,
-  `exportAsPDF()` (stub — not implemented), `destroy()`.
+  `setInkWeight(weight)`, `resize()`, `clearAll()`, `render()`, `exportAsImage()`
+  (sketch layer only, used by auto-save), `renderPaperAt(ctx, w, h)` (re-render
+  paper at any resolution), `buildComposite(factor)` (paper + ink canvas for
+  export), `exportAsPDF()` (stub — not implemented), `destroy()`.
 
 ---
 
 ## 6. Known TODOs / known issues
 
 - [ ] `exportAsPDF()` is a stub ("not yet implemented") — needs a PDF library
-      (e.g. jsPDF) or manual PDF generation.
+      (e.g. jsPDF) or manual PDF generation if PDF output is wanted.
+- [ ] WebGL path is effectively unused because a Canvas 2D context is created on
+      the same canvas before requesting the WebGL context (one context type per
+      canvas). To actually use GPU, the WebGL surface would need a separate
+      canvas/texture. The Canvas 2D renderer is used instead.
+- [ ] Text overlay in the exported PNG re-implements word-wrapping to match the
+      content area; if `#contentArea` styling changes, `drawContentText` must
+      match (font, line height, margin).
 - [ ] `src/engines/` and `src/pages/` are empty placeholders — no code yet.
 - [ ] Only `assembleDebug` is reliably built; `assembleRelease` is skipped
       unless signing keystore secrets are configured.
-- [ ] Inline styles live in the HTML blob; consider moving all to `src/style.css`
-      and importing it in `main.ts`.
 - [ ] Add a PWA service-worker cache-update strategy to match auto-update
       (`registerType: 'autoUpdate'` already set in vite config).
 
