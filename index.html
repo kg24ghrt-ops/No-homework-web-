@@ -111,6 +111,37 @@
             color: var(--primary);
         }
 
+        .ink-controls {
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ink-label {
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 0.9rem;
+        }
+
+        .ink-controls input[type="color"] {
+            width: 36px;
+            height: 32px;
+            border: 2px solid var(--secondary);
+            border-radius: 5px;
+            padding: 2px;
+            cursor: pointer;
+            background: white;
+        }
+
+        .ink-controls select {
+            padding: 5px 8px;
+            border: 2px solid var(--secondary);
+            border-radius: 5px;
+            background: white;
+            color: var(--primary);
+            font-weight: bold;
+            cursor: pointer;
+        }
+
         /* Notebook Container */
         .notebook-container {
             display: flex;
@@ -170,6 +201,7 @@
             bottom: 0;
             z-index: 10;
             cursor: crosshair;
+            pointer-events: none;
         }
 
         /* Content area for typing */
@@ -307,6 +339,16 @@
                 <button class="control-btn" id="clearBtn">Clear</button>
                 <button class="control-btn" id="exportBtn">Export</button>
             </div>
+            <div class="controls ink-controls">
+                <label class="ink-label" for="inkColor">Ink</label>
+                <input type="color" id="inkColor" value="#000000" title="Ink color">
+                <select id="inkWeight" title="Pen thickness">
+                    <option value="1">Fine</option>
+                    <option value="2" selected>Medium</option>
+                    <option value="4">Bold</option>
+                    <option value="7">Marker</option>
+                </select>
+            </div>
             <div class="ruling-info">
                 <span>Line Spacing: <span id="lineSpacing">8mm</span></span>
                 <span>Standard: <span id="standard">German DIN</span></span>
@@ -315,7 +357,6 @@
         
         <div class="notebook-container">
             <div class="notebook-page a4" id="notebookPage">
-                <canvas id="notebookCanvas"></canvas>
                 <div class="content-area" contenteditable="true" id="contentArea"></div>
             </div>
         </div>
@@ -323,6 +364,7 @@
         <div class="status-bar">
             <span>GPU Acceleration: <span id="gpuStatus">Checking...</span></span>
             <span>Rendering: <span id="renderMode">Canvas 2D</span></span>
+            <span id="saveStatus">Auto-save</span>
         </div>
     </div>
     

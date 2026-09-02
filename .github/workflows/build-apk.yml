@@ -178,7 +178,10 @@ jobs:
           
       - name: Sync Capacitor
         run: npx cap sync android
-        
+
+      - name: Set Android versionCode/versionName from package.json
+        run: node scripts/set-android-version.mjs
+
       - name: Build Debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
         

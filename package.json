@@ -1,6 +1,6 @@
 {
   "name": "no-homework-web",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "No Homework — Realistic A4/A5 notebook with GPU-accelerated rendering",
   "type": "module",
