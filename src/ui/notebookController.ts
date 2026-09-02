@@ -105,7 +105,7 @@ export class NotebookController {
     if (this.contentArea && this.contentArea.textContent?.trim()) {
       const ctx = composite.getContext('2d');
       if (ctx) {
-        this.drawContentText(ctx, composite.width, composite.height);
+        this.drawContentText(ctx, composite.width);
       }
     }
 
@@ -121,7 +121,7 @@ export class NotebookController {
    * Rasterize the typed content onto the export canvas using the same metrics
    * as the content area (Courier, line height = ruling spacing, left margin).
    */
-  private drawContentText(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  private drawContentText(ctx: CanvasRenderingContext2D, width: number): void {
     const { paperSizePx, marginPx, lineSpacingPx } = this.renderer;
     const cssScale = width / paperSizePx.width;
 
@@ -133,13 +133,14 @@ export class NotebookController {
     const wrapWidth = right - left;
 
     const text = this.contentArea?.textContent || '';
-    const lines = this.wrapText(text, ctx, fontSize, wrapWidth);
 
     ctx.save();
     ctx.font = `${fontSize}px 'Courier New', monospace`;
     ctx.fillStyle = '#1a1a1a';
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
+
+    const lines = this.wrapText(text, ctx, wrapWidth);
 
     lines.forEach((line, i) => {
       ctx.fillText(line, left, top + i * lineHeight);
@@ -148,7 +149,7 @@ export class NotebookController {
     ctx.restore();
   }
 
-  private wrapText(text: string, ctx: CanvasRenderingContext2D, fontSize: number, maxWidth: number): string[] {
+  private wrapText(text: string, ctx: CanvasRenderingContext2D, maxWidth: number): string[] {
     const paragraphs = text.split('\n');
     const lines: string[] = [];
 

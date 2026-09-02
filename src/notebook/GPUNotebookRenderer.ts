@@ -438,7 +438,7 @@ export class GPUNotebookRenderer {
    * exports stay sharp regardless of the on-screen (WebGL/2D) canvas. The
    * texture is regenerated at the target resolution.
    */
-  public renderPaperAt(ctx: CanvasRenderingContext2D, targetWidth: number, targetHeight: number): void {
+  public renderPaperAt(ctx: CanvasRenderingContext2D, targetWidth: number): void {
     const standard = PAPER_STANDARDS[this.currentSize];
     const cssWidth = standard.width * MM_TO_PX;
     const cssHeight = standard.height * MM_TO_PX;
@@ -464,7 +464,7 @@ export class GPUNotebookRenderer {
     ctx.imageSmoothingQuality = 'high';
 
     // Fresh paper at the target resolution.
-    this.renderPaperAt(ctx, out.width, out.height);
+    this.renderPaperAt(ctx, out.width);
 
     // The drawing (ink) layer, scaled to the same output pixels.
     if (this.atramentCanvas.width) {
