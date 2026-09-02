@@ -12,6 +12,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { Media } from '@capacitor-community/media';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 import { PAPER_STANDARDS } from '../notebook/paper';
 import type { PaperSize } from '../notebook/paper';
@@ -113,21 +114,21 @@ export class NotebookController {
     const scale = this.getExportScale();
     const composite = this.buildPageComposite(scale);
     const dpi = Math.round(scale * 96);
-    const fileName = `notebook-${this.renderer.size}-${dpi}dpi-${Date.now()}`;
+    const fileName = `notebook-${this.renderer.size}-${dpi}dpi-${Date.now()}.png`;
 
     // On Android/iOS, save straight to the device gallery. On the web, fall
     // back to a normal file download.
     if (Capacitor.isNativePlatform()) {
-      this.saveToGallery(composite.toDataURL('image/png'), fileName)
+      this.saveToGallery(composite, fileName)
         .then(() => this.setSaveStatus('Saved to gallery'))
         .catch(() => {
-          this.downloadWeb(composite, `${fileName}.png`);
+          this.downloadWeb(composite, fileName);
           this.setSaveStatus('Saved (download)');
         });
       return;
     }
 
-    this.downloadWeb(composite, `${fileName}.png`);
+    this.downloadWeb(composite, fileName);
   }
 
   private buildPageComposite(scale: number): HTMLCanvasElement {
@@ -169,13 +170,34 @@ export class NotebookController {
     }
   }
 
-  private async saveToGallery(dataUrl: string, fileName: string): Promise<void> {
+  private async saveToGallery(canvas: HTMLCanvasElement, fileName: string): Promise<void> {
     const albumIdentifier = await this.ensureGalleryAlbum();
-    await Media.savePhoto({
-      path: dataUrl,
-      albumIdentifier,
-      fileName
+    const path = await this.writeCanvasToTempFile(canvas, fileName);
+    try {
+      await Media.savePhoto({ path, albumIdentifier, fileName });
+    } finally {
+      try {
+        await Filesystem.deleteFile({ path: fileName, directory: Directory.Cache });
+      } catch { /* ignore cleanup errors */ }
+    }
+  }
+
+  private async writeCanvasToTempFile(canvas: HTMLCanvasElement, fileName: string): Promise<string> {
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('canvas toBlob failed')), 'image/png');
     });
+    const buf = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+    }
+    const result = await Filesystem.writeFile({
+      path: fileName,
+      data: btoa(binary),
+      directory: Directory.Cache,
+    });
+    return result.uri;
   }
 
   private setSaveStatus(message: string): void {
