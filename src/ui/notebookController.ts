@@ -190,7 +190,8 @@ export class NotebookController {
     const bytes = new Uint8Array(buf);
     let binary = '';
     for (let i = 0; i < bytes.length; i += 8192) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+      const chunk = bytes.subarray(i, i + 8192);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
     }
     const result = await Filesystem.writeFile({
       path: fileName,
